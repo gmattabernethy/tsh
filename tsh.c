@@ -41,6 +41,7 @@ char prompt[] = "tsh> ";    /* command line prompt (DO NOT CHANGE) */
 int verbose = 0;            /* if true, print additional output */
 int nextjid = 1;            /* next job ID to allocate */
 char sbuf[MAXLINE];         /* for composing sprintf messages */
+int cpid;					/* child pid */ 
 
 struct job_t {              /* The job struct */
     pid_t pid;              /* job PID */
@@ -179,16 +180,21 @@ void eval(char *cmdline)
 		exit(1);
 	}
 	else if(pid == 0){
+		setpgid(0,0);
 		execv(argv[0], argv);
 	}
+	
+	cpid = pid;
 
 	if(bg == 1){
 		addjob(jobs, pid, BG, cmdline);
-		int jid = pid2jid(pid); 
-		printf("[%d] (%d) %s\n", jid, pid, cmdline);
+		int i = pid2jid(pid) - 1; 
+		printf("[%d] (%d) %s\n", jobs[i].jid, jobs[i].pid, jobs[i].cmdline);
 	}
 	else{
+		addjob(jobs, pid, FG, cmdline);
 		waitfg(pid);
+		deletejob(jobs, pid);
 	}
 
 	return;
@@ -315,6 +321,9 @@ void sigchld_handler(int sig)
  */
 void sigint_handler(int sig) 
 {
+	int i = pid2jid(cpid) - 1;
+	printf("Job [%d] (%d) terminated by signal %d\n", jobs[i].jid, jobs[i].pid, sig);
+	kill(-cpid, sig);
     return;
 }
 
@@ -325,6 +334,9 @@ void sigint_handler(int sig)
  */
 void sigtstp_handler(int sig) 
 {
+	int i = pid2jid(cpid) - 1;
+	printf("Job [%d] (%d) stopped by signal %d\n", jobs[i].jid, jobs[i].pid, sig);
+	kill(cpid, sig);
     return;
 }
 
